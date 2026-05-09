@@ -175,6 +175,17 @@ export default function Attendance() {
             </div>
           )}
 
+          {/* New DTR Entry button */}
+          <button
+            onClick={() => setModal({ newEntry: true })}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-brand-700 hover:bg-brand-600 text-white rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New DTR Entry
+          </button>
+
           {/* View toggle */}
           <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
             {[
@@ -458,11 +469,24 @@ export default function Attendance() {
       )}
 
       {/* Attendance log modal — works for both views */}
-      {modal && (
+      {modal && !modal.newEntry && (
         <AttendanceModal
           date={modal.overrideDate ?? date}
           employee={modal.employee}
           existing={modal.existing}
+          onSave={record => {
+            dispatch({ type: 'UPSERT_ATTENDANCE', records: [record] })
+            setModal(null)
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* New DTR Entry modal */}
+      {modal?.newEntry && (
+        <DTRModal
+          defaultDate={date}
+          employees={activeEmp}
           onSave={record => {
             dispatch({ type: 'UPSERT_ATTENDANCE', records: [record] })
             setModal(null)
@@ -602,6 +626,220 @@ function AttendanceModal({ date, employee, existing, onSave, onClose }) {
         <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-100">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
           <button onClick={handleSave} className="px-5 py-2 text-sm font-semibold bg-brand-700 hover:bg-brand-600 text-white rounded-lg transition-colors">Save</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DTRModal({ defaultDate, employees, onSave, onClose }) {
+  const [employeeId, setEmployeeId] = useState('')
+  const [empSearch, setEmpSearch]   = useState('')
+  const [empOpen, setEmpOpen]       = useState(false)
+  const [date, setDate]             = useState(defaultDate)
+  const [timeIn, setTimeIn]         = useState('08:00')
+  const [timeOut, setTimeOut]       = useState('17:00')
+  const [regHours, setRegHours]     = useState(8)
+  const [otHours, setOTHours]       = useState(0)
+  const [lateMin, setLateMin]       = useState(0)
+  const [utMin, setUtMin]           = useState(0)
+  const [absent, setAbsent]         = useState(false)
+  const [restDay, setRestDay]       = useState(false)
+  const [holiday, setHoliday]       = useState(false)
+  const [remarks, setRemarks]       = useState('')
+  const [error, setError]           = useState('')
+
+  const selectedEmp = employees.find(e => e.id === employeeId)
+  const filteredEmps = employees.filter(e => {
+    const q = empSearch.toLowerCase()
+    return !q || `${e.firstName} ${e.lastName}`.toLowerCase().includes(q) || e.position?.toLowerCase().includes(q)
+  })
+
+  function handleSave() {
+    if (!employeeId) { setError('Please select an employee.'); return }
+    if (!date)       { setError('Please select a date.'); return }
+    setError('')
+    const status = absent ? 'absent' : Number(lateMin) > 0 ? 'late' : 'present'
+    onSave({
+      employeeId,
+      date,
+      status,
+      timeIn:           absent ? null : timeIn,
+      timeOut:          absent ? null : timeOut,
+      lateMinutes:      absent ? 0 : Number(lateMin),
+      undertimeMinutes: absent ? 0 : Number(utMin),
+      hoursWorked:      absent ? 0 : Number(regHours),
+      otHours:          absent ? 0 : Number(otHours),
+      restDay,
+      holiday,
+      remarks: remarks.trim() || null,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800 text-base">New DTR Entry</h3>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+
+          {/* Employee + Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="relative">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Employee <span className="text-red-500">*</span></label>
+              <div
+                className={`flex items-center gap-2 w-full px-3 py-2 border rounded-lg text-sm cursor-text ${empOpen ? 'border-brand-500 ring-2 ring-brand-500' : 'border-gray-300'}`}
+                onClick={() => { setEmpOpen(true) }}
+              >
+                {empOpen ? (
+                  <input
+                    autoFocus
+                    value={empSearch}
+                    onChange={e => setEmpSearch(e.target.value)}
+                    placeholder="Search name or position..."
+                    className="flex-1 outline-none bg-transparent text-gray-800 placeholder-gray-400"
+                    onBlur={() => setTimeout(() => setEmpOpen(false), 150)}
+                  />
+                ) : (
+                  <span className={`flex-1 truncate ${selectedEmp ? 'text-gray-800' : 'text-gray-400'}`}>
+                    {selectedEmp ? `${selectedEmp.lastName}, ${selectedEmp.firstName}` : 'Select employee...'}
+                  </span>
+                )}
+                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                </svg>
+              </div>
+              {empOpen && (
+                <ul className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredEmps.length === 0 && (
+                    <li className="px-3 py-2 text-xs text-gray-400">No employees found.</li>
+                  )}
+                  {filteredEmps.map(emp => (
+                    <li
+                      key={emp.id}
+                      onMouseDown={() => { setEmployeeId(emp.id); setEmpSearch(''); setEmpOpen(false) }}
+                      className={`px-3 py-2 cursor-pointer hover:bg-brand-50 text-sm ${emp.id === employeeId ? 'bg-brand-50 font-medium text-brand-700' : 'text-gray-700'}`}
+                    >
+                      <div>{emp.lastName}, {emp.firstName}</div>
+                      {emp.position && <div className="text-xs text-gray-400">{emp.position}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Date <span className="text-red-500">*</span></label>
+              <input
+                type="date" value={date}
+                onChange={e => setDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+
+          {/* Time In / Time Out */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Time In</label>
+              <input
+                type="time" value={timeIn}
+                disabled={absent}
+                onChange={e => setTimeIn(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Time Out</label>
+              <input
+                type="time" value={timeOut}
+                disabled={absent}
+                onChange={e => setTimeOut(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+          </div>
+
+          {/* Hours */}
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Regular Hours</label>
+              <input
+                type="number" value={regHours} min={0} max={12} step={0.5}
+                disabled={absent}
+                onChange={e => setRegHours(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">OT Hours</label>
+              <input
+                type="number" value={otHours} min={0} max={8} step={0.5}
+                disabled={absent}
+                onChange={e => setOTHours(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Late (min)</label>
+              <input
+                type="number" value={lateMin} min={0}
+                disabled={absent}
+                onChange={e => setLateMin(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Undertime (min)</label>
+              <input
+                type="number" value={utMin} min={0}
+                disabled={absent}
+                onChange={e => setUtMin(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+          </div>
+
+          {/* Checkboxes + Remarks */}
+          <div className="flex flex-wrap items-center gap-5">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={absent} onChange={e => setAbsent(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              Absent
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={restDay} onChange={e => setRestDay(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              Rest Day
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={holiday} onChange={e => setHoliday(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              Holiday
+            </label>
+            <input
+              type="text" value={remarks} placeholder="Remarks (optional)"
+              onChange={e => setRemarks(e.target.value)}
+              className="flex-1 min-w-[160px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button
+            onClick={handleSave}
+            className="px-5 py-2 text-sm font-semibold bg-brand-700 hover:bg-brand-600 text-white rounded-lg transition-colors"
+          >
+            Save DTR Entry
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>
