@@ -83,6 +83,22 @@ const INITIAL_LEAVE_TYPES = [
   },
 ]
 
+function computeMonthsWorked(hireDate, coverageStart, coverageEnd) {
+  const start = new Date(Math.max(
+    new Date(coverageStart + 'T00:00:00').getTime(),
+    new Date((hireDate || coverageStart) + 'T00:00:00').getTime()
+  ))
+  const end = new Date(coverageEnd + 'T00:00:00')
+  if (start > end) return 0
+  return Math.min(12, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
+}
+
+function estimateBasicPaid(emp, months) {
+  if (emp.salaryType === 'monthly') return emp.basicSalary * months
+  if (emp.salaryType === 'daily')   return emp.basicSalary * 26 * months
+  return emp.basicSalary * 8 * 26 * months
+}
+
 function initialState() {
   const saved = loadState()
   return {
@@ -96,6 +112,8 @@ function initialState() {
     positions:         saved?.positions         ?? INITIAL_POSITIONS,
     leaveTypes:        (saved?.leaveTypes?.length >= INITIAL_LEAVE_TYPES.length) ? saved.leaveTypes : INITIAL_LEAVE_TYPES,
     leaveRequests:     saved?.leaveRequests     ?? [],
+    thirteenthMonth:   saved?.thirteenthMonth   ?? [],
+    loans:             saved?.loans             ?? [],
     payrollLoading: false,
   }
 }
@@ -294,6 +312,116 @@ function reducer(state, action) {
         payroll,
       ]
       return { ...state, payrolls, payrollLoading: false }
+    }
+
+    case 'COMPUTE_13TH_MONTH': {
+      const { year, coverageStart, coverageEnd, companyId } = action
+      const targetEmps = state.employees.filter(e =>
+        e.status === 'active' && (!companyId || e.companyId === companyId)
+      )
+
+      // Sum basicPay from finalized payrolls within coverage
+      const basicByEmp = {}
+      state.payrolls
+        .filter(p => (!companyId || p.companyId === companyId) &&
+          p.coverageStart >= coverageStart && p.coverageEnd <= coverageEnd)
+        .forEach(pr => pr.items?.forEach(item => {
+          basicByEmp[item.employeeId] = (basicByEmp[item.employeeId] ?? 0) + (item.basicPay ?? 0)
+        }))
+
+      // Preserve existing paid status
+      const existing = (state.thirteenthMonth ?? []).find(
+        t => t.year === year && t.companyId === (companyId ?? null)
+      )
+      const paidMap = Object.fromEntries(
+        (existing?.items ?? []).filter(i => i.paid).map(i => [i.employeeId, i.paidAt])
+      )
+
+      const items = targetEmps.map(emp => {
+        const months = computeMonthsWorked(emp.hireDate, coverageStart, coverageEnd)
+        const totalBasicPaid = basicByEmp[emp.id] != null
+          ? basicByEmp[emp.id]
+          : estimateBasicPaid(emp, months)
+        return {
+          employeeId: emp.id,
+          months,
+          totalBasicPaid: Math.round(totalBasicPaid * 100) / 100,
+          amount: Math.round((totalBasicPaid / 12) * 100) / 100,
+          paid: !!paidMap[emp.id],
+          paidAt: paidMap[emp.id] ?? null,
+        }
+      })
+
+      const record = {
+        id: `13TH-${year}-${companyId ?? 'ALL'}`,
+        year, companyId: companyId ?? null,
+        coverageStart, coverageEnd,
+        generatedAt: new Date().toISOString(),
+        items,
+      }
+      return {
+        ...state,
+        thirteenthMonth: [
+          ...(state.thirteenthMonth ?? []).filter(
+            t => !(t.year === year && t.companyId === (companyId ?? null))
+          ),
+          record,
+        ],
+      }
+    }
+
+    case 'MARK_13TH_PAID': {
+      const { year, employeeId, companyId } = action
+      return {
+        ...state,
+        thirteenthMonth: (state.thirteenthMonth ?? []).map(t => {
+          if (t.year !== year || t.companyId !== (companyId ?? null)) return t
+          return {
+            ...t,
+            items: t.items.map(i =>
+              i.employeeId === employeeId
+                ? { ...i, paid: true, paidAt: new Date().toISOString() }
+                : i
+            ),
+          }
+        }),
+      }
+    }
+
+    case 'ADD_LOAN': {
+      const loan = {
+        ...action.loan,
+        id: `LOAN-${Date.now()}`,
+        balance: action.loan.principal,
+        status: 'active',
+        createdAt: new Date().toISOString().slice(0, 10),
+      }
+      return { ...state, loans: [...(state.loans ?? []), loan] }
+    }
+
+    case 'UPDATE_LOAN': {
+      return {
+        ...state,
+        loans: (state.loans ?? []).map(l => l.id === action.loan.id ? { ...l, ...action.loan } : l),
+      }
+    }
+
+    case 'CANCEL_LOAN': {
+      return {
+        ...state,
+        loans: (state.loans ?? []).map(l =>
+          l.id === action.id ? { ...l, status: 'cancelled' } : l
+        ),
+      }
+    }
+
+    case 'MARK_LOAN_PAID': {
+      return {
+        ...state,
+        loans: (state.loans ?? []).map(l =>
+          l.id === action.id ? { ...l, status: 'fully_paid', balance: 0 } : l
+        ),
+      }
     }
 
     default:

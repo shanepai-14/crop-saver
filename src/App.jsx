@@ -15,6 +15,8 @@ import Employees from './pages/system/Employees'
 import EmployeeDetail from './pages/system/EmployeeDetail'
 import Attendance from './pages/system/Attendance'
 import Payroll from './pages/system/Payroll'
+import ThirteenthMonth from './pages/system/ThirteenthMonth'
+import Loans from './pages/system/Loans'
 import Reports from './pages/system/Reports'
 import LeaveTypes from './pages/system/LeaveTypes'
 import LeaveRequests from './pages/system/LeaveRequests'
@@ -35,7 +37,9 @@ export default function App() {
             <Route path="/employees"     element={<Employees />} />
             <Route path="/employees/:id" element={<EmployeeDetail />} />
             <Route path="/attendance" element={<Attendance />} />
-            <Route path="/payroll"    element={<Payroll />} />
+            <Route path="/payroll"                  element={<Payroll />} />
+            <Route path="/payroll/thirteenth-month" element={<ThirteenthMonth />} />
+            <Route path="/payroll/loans"            element={<Loans />} />
             <Route path="/reports"         element={<Reports />} />
             <Route path="/leave-requests"  element={<LeaveRequests />} />
             <Route path="/leave-types"     element={<LeaveTypes />} />

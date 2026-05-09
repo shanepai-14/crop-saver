@@ -24,6 +24,9 @@ const ICONS = {
   chevron:      'M19 9l-7 7-7-7',
   employment:   'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
   leaveMgmt:    'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  payrollRuns:  'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  thirteenth:   'M20 12v10H4V12M2 7h20v5H2V7zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z',
+  loans:        'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
 }
 
 // ── Nav structure ─────────────────────────────────────────
@@ -39,7 +42,14 @@ const NAV = [
     ],
   },
   { type: 'link',  to: '/attendance', label: 'Attendance', icon: 'attendance' },
-  { type: 'link',  to: '/payroll',    label: 'Payroll',    icon: 'payroll' },
+  {
+    type: 'group', id: 'payroll', label: 'Payroll', icon: 'payroll',
+    children: [
+      { to: '/payroll',                  label: 'Payroll Runs',   icon: 'payrollRuns' },
+      { to: '/payroll/thirteenth-month', label: '13th Month Pay', icon: 'thirteenth' },
+      { to: '/payroll/loans',            label: 'Loans',          icon: 'loans' },
+    ],
+  },
   { type: 'link',  to: '/reports',    label: 'Reports',    icon: 'reports' },
   {
     type: 'group', id: 'leave', label: 'Leave Management', icon: 'leaveMgmt',
@@ -80,7 +90,7 @@ export default function Sidebar({ onClose }) {
     return active
   }, [location])
 
-  const [openGroups, setOpenGroups] = useState(() => new Set(['employment', 'leave']))
+  const [openGroups, setOpenGroups] = useState(() => new Set(['employment', 'leave', 'payroll']))
 
   function toggleGroup(id) {
     setOpenGroups(prev => {
